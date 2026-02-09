@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Тест Telegram Web App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      color: #0088cc;
+    }
+    button {
+      background-color: #0088cc;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background-color: #005f99;
+    }
+  </style>
+</head>
+<body>
+  <h1>Тест Telegram Web App</h1>
+  <p>Нажмите кнопку, чтобы проверить работу Web App в Telegram:</p>
+  <button onclick="openTelegram()">Открыть в Telegram</button>
+
+  <script>
+    function openTelegram() {
+      // Ссылка на ваш Telegram Web App (пример)
+      const tgAppUrl = "https://t.me/your_bot?start=test";
+      window.open(tgAppUrl, "_blank");
+    }
+  </script>
+</body>
+</html>
