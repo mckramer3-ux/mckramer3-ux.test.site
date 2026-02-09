@@ -1628,9 +1628,9 @@ if (window.Element && !Element.prototype.closest) {
     };
 
     //TODO:исправить dry в методах storage https://roistat.platrum.ru/tasks/task/632239
-    window.storage = {
+    storage = {
         fallbackData: {},
-    
+
         isAvailable: function() {
             try {
                 if (!window.localStorage) return false;
@@ -1641,63 +1641,63 @@ if (window.Element && !Element.prototype.closest) {
                 return false;
             }
         },
-    
+
         remove: function(name) {
             const key = buildCookieName(name);
-    
+
             // Telegram DeviceStorage
             if (name === 'roistat_visit' && window.Telegram?.WebApp?.DeviceStorage) {
                 try { Telegram.WebApp.DeviceStorage.remove(name); } catch(e) {}
             }
-    
+
             if (this.isAvailable()) {
                 localStorage.removeItem(key);
             } else {
                 const date = new Date(1970, 1, 1);
                 roistatSetCookie(name, '', {expires: date.toUTCString()});
             }
-    
+
             delete this.fallbackData[key];
         },
-    
+
         set: function(name, value) {
             const key = buildCookieName(name);
-    
+
             if (name === 'roistat_visit' && window.Telegram?.WebApp?.DeviceStorage) {
                 try { Telegram.WebApp.DeviceStorage.set(name, String(value)); } catch(e) {}
             }
-    
+
             if (this.isAvailable()) {
                 localStorage.setItem(key, value);
             } else if (this.isSaveInCookieEnabled()) {
                 roistatSetCookie(name, value, COOKIE_CONFIG);
             }
-    
+
             this.fallbackData[key] = value;
         },
-    
+
         get: function(name) {
             const key = buildCookieName(name);
             let result = null;
-    
+
             // DeviceStorage cache для roistat_visit
             if (name === 'roistat_visit' && this.fallbackData[key] !== undefined) {
                 return this.fallbackData[key];
             }
-    
+
             if (this.isAvailable()) result = localStorage.getItem(key);
             if (result === null) result = roistatGetCookie(name);
             if (result === undefined) result = this.fallbackData[key];
-    
+
             return result;
         },
-    
+
         setObject: function(name, data) {
             const key = buildCookieName(name);
             if (this.isAvailable()) localStorage.setItem(key, JSON.stringify(data));
             this.fallbackData[key] = data;
         },
-    
+
         getObject: function(name) {
             const key = buildCookieName(name);
             let result = null;
@@ -1705,15 +1705,21 @@ if (window.Element && !Element.prototype.closest) {
             if (result === null && this.fallbackData[key] !== undefined) result = this.fallbackData[key];
             return result;
         },
-    
+
         isSaveInCookieEnabled: function() {
             return this.get(ROISTAT_SAVE_DATA_IN_COOKIE) > 0;
         },
-    
+
         isExternalCountersEnabled: function() {
             return this.get(EXTERNAL_COUNTERS_ENABLED) > 0;
         }
     };
+    
+    storage.set('roistat_visit', 'test_visit_123');
+    storage.get('roistat_visit');
+    storage.setObject('test_object', {foo: 1, bar: 2});
+    storage.getObject('test_object');
+    storage.remove('roistat_visit');
 
     /**
      * @returns {string}
