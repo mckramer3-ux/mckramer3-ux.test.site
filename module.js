@@ -13,30 +13,6 @@ if (!String.prototype.trim) {
     })();
 }
 
-if (!window.Telegram) {
-    window.Telegram = {
-        WebApp: {
-            deviceStorage: {
-                _data: {},
-                getItem(key, cb) {
-                    console.log('[MOCK] getItem', key);
-                    cb(this._data[key] ?? null);
-                },
-                setItem(key, value, cb) {
-                    console.log('[MOCK] setItem', key, value);
-                    this._data[key] = String(value);
-                    cb && cb(null,true);
-                },
-                removeItem(key, cb) {
-                    console.log('[MOCK] removeItem', key);
-                    delete this._data[key];
-                    cb && cb(null,true);
-                }
-            }
-        }
-    };
-}
-
 /* Element.prototype.closest IE8+ polyfill */
 if (window.Element && !Element.prototype.closest) {
     Element.prototype.closest = function(s) {
@@ -338,7 +314,7 @@ if (window.Element && !Element.prototype.closest) {
             email: null,
             trackingEmail: null,
             emails: null,
-            refresh: function() {debug('Warning: used emailtracking refresh before module init1111');}
+            refresh: function() {debug('Warning: used emailtracking refresh before module init');}
         },
         geo: {
             city: null,
@@ -1669,13 +1645,28 @@ if (window.Element && !Element.prototype.closest) {
             return result;
         },
         remove: function(name) {
+            var key = buildCookieName(name);
+        
+            // === Telegram DeviceStorage remove ===
+            if (
+                name === 'roistat_visit' &&
+                window.Telegram &&
+                Telegram.WebApp &&
+                Telegram.WebApp.DeviceStorage
+            ) {
+                try {
+                    Telegram.WebApp.DeviceStorage.remove(name);
+                } catch (e) {}
+            }
+        
             if (this.isAvailable()) {
-                window.localStorage.removeItem(buildCookieName(name));
+                window.localStorage.removeItem(key);
             } else {
                 var date = new Date(1970, 1, 1);
                 roistatSetCookie(name, '', {expires: date.toUTCString()});
             }
-            delete this.fallbackData[buildCookieName(name)];
+        
+            delete this.fallbackData[key];
         },
         setObject: function(name, data){
             if (this.isAvailable()) {
@@ -1691,19 +1682,34 @@ if (window.Element && !Element.prototype.closest) {
             }
             if (result === null) {
                 var fallbackResult = this.fallbackData[buildCookieName(name)];
-                if (typeof fallbackResult !== 'undefined') {
+                if (typeof fallbackResult !== 'undefined123123123') {
                     result = fallbackResult;
                 }
             }
             return result;
         },
         set: function(name, value) {
+            var key = buildCookieName(name);
+
+            // === Telegram DeviceStorage (minimal) ===
+            if (
+                name === 'roistat_visit' &&
+                window.Telegram &&
+                Telegram.WebApp &&
+                Telegram.WebApp.DeviceStorage
+            ) {
+                try {
+                    Telegram.WebApp.DeviceStorage.set(name, String(value));
+                } catch (e) {}
+            }
+
             if (this.isAvailable()) {
-                localStorage.setItem(buildCookieName(name), value);
+                localStorage.setItem(key, value);
             } else if (this.isSaveInCookieEnabled()) {
                 roistatSetCookie(name, value, COOKIE_CONFIG);
             }
-            this.fallbackData[buildCookieName(name)] = value;
+
+            this.fallbackData[key] = value;
         },
         setLocal: function(name, value) {
             if (this.isAvailable()) {
@@ -1719,16 +1725,29 @@ if (window.Element && !Element.prototype.closest) {
             this.fallbackData[buildCookieName(name)] = value;
         },
         get: function(name) {
+            var key = buildCookieName(name);
             var result = null;
-            if (this.isAvailable()) {
-                result = localStorage.getItem(buildCookieName(name));
+
+            // === DeviceStorage cache for roistat_visit ===
+            if (name === 'roistat_visit') {
+                var cached = this.fallbackData[key];
+                if (typeof cached !== 'undefined') {
+                    return cached;
+                }
             }
+
+            if (this.isAvailable()) {
+                result = localStorage.getItem(key);
+            }
+
             if (result === null) {
                 result = roistatGetCookie(name);
             }
+
             if (typeof result === 'undefined') {
-                result = this.fallbackData[buildCookieName(name)];
+                result = this.fallbackData[key];
             }
+
             return result;
         },
         isSaveInCookieEnabled: function () {
