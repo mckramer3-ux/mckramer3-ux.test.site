@@ -36,12 +36,15 @@
 <body>
   <!-- Roistat Counter Start -->
 <script>
-(function(w, d, s, h, id) {
-    w.roistatProjectId = id; w.roistatHost = h;
-    var p = d.location.protocol == "https:" ? "https://" : "http://";
-    var u = /^.*roistat_visit=[^;]+(.*)?$/.test(d.cookie) ? "/dist/module.js" : "/api/site/1.0/"+id+"/init?referrer="+encodeURIComponent(d.location.href);
-    var js = d.createElement(s); js.charset="UTF-8"; js.async = 1; js.src = p+h+u; var js2 = d.getElementsByTagName(s)[0]; js2.parentNode.insertBefore(js, js2);
-})(window, document, 'script', 'cloud.roistat.com', 'cb926fac1babdb92091fc53bd712d3a2');
+(function(d, s) {
+    var js = d.createElement(s);
+    js.charset = "UTF-8";
+    js.async = true;
+    js.src = "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js";
+
+    var js2 = d.getElementsByTagName(s)[0];
+    js2.parentNode.insertBefore(js, js2);
+})(document, 'script');
 </script>
 <!-- Roistat Counter End -->
   <h1>Тест Telegram Web App</h1>
@@ -57,4 +60,5 @@
   </script>
 </body>
 </html>
+
 
