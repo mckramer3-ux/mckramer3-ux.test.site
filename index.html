@@ -33,6 +33,14 @@
     }
   </style>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.Telegram && Telegram.WebApp) {
+      Telegram.WebApp.ready();
+      // Telegram.WebApp.expand(); // опционально
+    }
+  });
+</script>
 </head>
 <body>
   <!-- Roistat Counter Start -->
@@ -86,6 +94,7 @@
 </script>
 </body>
 </html>
+
 
 
 
