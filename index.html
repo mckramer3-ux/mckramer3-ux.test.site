@@ -77,23 +77,179 @@
       window.open(tgAppUrl, "_blank");
     }
   </script>
-  <div id="tg-check" style="position:fixed;left:0;bottom:0;right:0;background:#111;color:#0f0;padding:10px;font:12px/1.4 monospace;z-index:999999"></div>
+ <div id="tg-check" style="position:fixed;left:0;bottom:0;right:0;max-height:55vh;overflow:auto;background:#111;color:#0f0;padding:10px;font:12px/1.4 monospace;z-index:999999;white-space:pre-wrap"></div>
+ <div id="tg-err" style="position:fixed;left:0;top:0;right:0;max-height:25vh;overflow:auto;background:#300;color:#fff;padding:10px;font:12px/1.4 monospace;z-index:1000000;white-space:pre-wrap;display:none"></div>
+
 
 <script>
 (function () {
-  function show() {
-    var out = [];
-    out.push('href: ' + location.href);
-    out.push('has window.Telegram: ' + !!window.Telegram);
-    out.push('has Telegram.WebApp: ' + !!(window.Telegram && Telegram.WebApp));
-    out.push('has DeviceStorage: ' + !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.DeviceStorage));
-    document.getElementById('tg-check').textContent = out.join('\n');
+  var lastTgRead = {};
+  var tgReadInFlight = false;
+
+  function safe(fn, fallback) {
+    try { return fn(); } catch (e) { return fallback; }
   }
-  setInterval(show, 500);
+
+  function digitsOnly(str) {
+    return String(str || '').replace(/\D/g, '');
+  }
+
+  function getCookie(name) {
+    // простая выборка cookie по имени
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[$()*+./?[\\\]^{|}-]/g, '\\$&') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  function render(outLines) {
+    var el = document.getElementById('tg-check');
+    if (el) el.textContent = outLines.join('\n');
+  }
+
+  function renderErr(text) {
+    var el = document.getElementById('tg-err');
+    if (!el) return;
+    if (!text) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.style.display = 'block';
+    el.textContent = text;
+  }
+
+  // ловим любые ошибки (часто полезно, когда нет консоли WebView)
+  window.addEventListener('error', function (e) {
+    renderErr('JS error: ' + (e.message || e.type) + '\n' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || ''));
+  });
+
+  window.addEventListener('unhandledrejection', function (e) {
+    renderErr('Unhandled rejection: ' + (e.reason && (e.reason.message || String(e.reason))) );
+  });
+
+  function update() {
+    var out = [];
+
+    // --- Telegram окружение
+    var hasTelegram = !!window.Telegram;
+    var hasWebApp = !!(window.Telegram && Telegram.WebApp);
+    var hasDeviceStorage = !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.DeviceStorage);
+
+    out.push('=== Telegram ===');
+    out.push('href: ' + location.href);
+    out.push('has window.Telegram: ' + hasTelegram);
+    out.push('has Telegram.WebApp: ' + hasWebApp);
+    out.push('has DeviceStorage: ' + hasDeviceStorage);
+    if (hasWebApp) {
+      out.push('tg version: ' + safe(function(){ return Telegram.WebApp.version; }, 'n/a'));
+      out.push('tg platform: ' + safe(function(){ return Telegram.WebApp.platform; }, 'n/a'));
+      out.push('initData len: ' + safe(function(){ return (Telegram.WebApp.initData || '').length; }, 0));
+    }
+
+    // --- Roistat базовые переменные
+    out.push('\n=== Roistat globals ===');
+    out.push('roistatProjectId: ' + String(window.roistatProjectId || ''));
+    out.push('roistatHost: ' + String(window.roistatHost || ''));
+    out.push('projectHash(digits): ' + digitsOnly(window.roistatProjectId));
+    out.push('roistatAlreadyStarted: ' + String(!!window.roistatAlreadyStarted));
+
+    // --- Roistat объект/версия/visit
+    out.push('\n=== Roistat object ===');
+    out.push('window.roistat exists: ' + String(!!window.roistat));
+    if (window.roistat) {
+      out.push('roistat.version: ' + String(window.roistat.version));
+      out.push('roistat.visit: ' + String(window.roistat.visit));
+      out.push('roistat.getVisit(): ' + String(safe(function(){ return window.roistat.getVisit(); }, 'err')));
+      out.push('roistat.getSource(): ' + String(safe(function(){ return window.roistat.getSource(); }, 'err')));
+    }
+
+    // --- Cookie/localStorage с точки зрения страницы
+    out.push('\n=== Browser storage snapshot ===');
+    // эти имена у вас в коде используются как базовые
+    var cookieVisit = getCookie('roistat_visit');
+    var cookieFirst = getCookie('roistat_first_visit');
+    var cookieMarker = getCookie('roistat_marker');
+
+    out.push('cookie roistat_visit: ' + String(cookieVisit));
+    out.push('cookie roistat_first_visit: ' + String(cookieFirst));
+    out.push('cookie roistat_marker: ' + String(cookieMarker));
+
+    var lsVisit = safe(function(){ return localStorage.getItem('roistat_visit'); }, null);
+    var lsFirst = safe(function(){ return localStorage.getItem('roistat_first_visit'); }, null);
+    var lsMarker = safe(function(){ return localStorage.getItem('roistat_marker'); }, null);
+
+    out.push('localStorage roistat_visit: ' + String(lsVisit));
+    out.push('localStorage roistat_first_visit: ' + String(lsFirst));
+    out.push('localStorage roistat_marker: ' + String(lsMarker));
+
+    // --- Telegram DeviceStorage чтение (асинхронно)
+    out.push('\n=== Telegram DeviceStorage ===');
+    if (!hasDeviceStorage) {
+      out.push('DeviceStorage not available.');
+      render(out);
+      return;
+    }
+
+    // ключи должны совпадать с тем, как у вас формируется tgDeviceStorageKey:
+    // 'roistat:' + projectId + ':' + buildCookieName(name)
+    // buildCookieName(name) в большинстве случаев == name (если не white label FG),
+    // поэтому для теста выводим именно так:
+    var projectId = String(window.roistatProjectId || '');
+    var keysToRead = [
+      'roistat_visit',
+      'roistat_first_visit',
+      'roistat_marker',
+      'roistat_settings_saved',
+      'roistat_is_save_data_in_cookie'
+    ];
+
+    var fullKeys = keysToRead.map(function(name){
+      return {
+        name: name,
+        key: 'roistat:' + projectId + ':' + name
+      };
+    });
+
+    // показываем последние прочитанные значения (из lastTgRead)
+    fullKeys.forEach(function(k){
+      var v = (k.key in lastTgRead) ? lastTgRead[k.key] : '(not read yet)';
+      out.push(k.key + ' => ' + String(v));
+    });
+
+    render(out);
+
+    // запускаем асинхронное чтение раз в ~1 сек, чтобы не спамить
+    if (tgReadInFlight) return;
+    tgReadInFlight = true;
+
+    var left = fullKeys.length;
+    fullKeys.forEach(function(k){
+      safe(function(){
+        Telegram.WebApp.DeviceStorage.getItem(k.key, function(err, value){
+          // err может быть объектом/строкой или null
+          if (err) {
+            lastTgRead[k.key] = 'ERR: ' + (err.message || String(err));
+          } else if (value === null || typeof value === 'undefined' || String(value).length === 0) {
+            lastTgRead[k.key] = '(empty)';
+          } else {
+            lastTgRead[k.key] = value;
+          }
+
+          left--;
+          if (left <= 0) {
+            tgReadInFlight = false;
+          }
+        });
+      }, null);
+    });
+  }
+
+  // обновляем часто, но чтение TG делаем “мягко” (tgReadInFlight защищает от спама)
+  setInterval(update, 500);
 })();
 </script>
 </body>
 </html>
+
 
 
 
