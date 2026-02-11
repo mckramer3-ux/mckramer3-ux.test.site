@@ -68,8 +68,24 @@
       window.open(tgAppUrl, "_blank");
     }
   </script>
+  <div id="tg-check" style="position:fixed;left:0;bottom:0;right:0;background:#111;color:#0f0;padding:10px;font:12px/1.4 monospace;z-index:999999"></div>
+
+<script>
+(function () {
+  function show() {
+    var out = [];
+    out.push('href: ' + location.href);
+    out.push('has window.Telegram: ' + !!window.Telegram);
+    out.push('has Telegram.WebApp: ' + !!(window.Telegram && Telegram.WebApp));
+    out.push('has DeviceStorage: ' + !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.DeviceStorage));
+    document.getElementById('tg-check').textContent = out.join('\n');
+  }
+  setInterval(show, 500);
+})();
+</script>
 </body>
 </html>
+
 
 
 
