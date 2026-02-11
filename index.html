@@ -37,19 +37,20 @@
   <!-- Roistat Counter Start -->
 <script>
 (function(w, d, s) {
-  // 1) подставляем ваш боевой ProjectId (hex из счётчика)
   w.roistatProjectId = 'cb926fac1babdb92091fc53bd712d3a2';
-
-  // 2) хост, с которого будет строиться API внутри module.js
-  // ВНИМАНИЕ: если вы укажете GitHub Pages, то запросы к /api/... пойдут на GitHub (404)
-  // Для теста Telegram-ветки это может быть ок, но для реального роистат-API — нет.
   w.roistatHost = 'cloud.roistat.com';
 
-  // 3) грузим вашу тестовую сборку module.js
   var js = d.createElement(s);
   js.charset = "UTF-8";
   js.async = true;
-  js.src = "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js";
+  js.src = "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js?v=" + Date.now();
+
+  js.onload = function() {
+    console.log('[RS TEST] module.js loaded, window.roistat=', w.roistat);
+  };
+  js.onerror = function(e) {
+    console.log('[RS TEST] module.js failed to load', e);
+  };
 
   var js2 = d.getElementsByTagName(s)[0];
   js2.parentNode.insertBefore(js, js2);
@@ -69,6 +70,7 @@
   </script>
 </body>
 </html>
+
 
 
 
