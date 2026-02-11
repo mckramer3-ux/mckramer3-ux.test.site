@@ -907,6 +907,21 @@ if (window.Element && !Element.prototype.closest) {
             '87201407176252054537', //241313
             '320784366854304269447164' //30889
         ]),
+
+        isTelegramVisitsFocusGroupEnabled = isProjectInFocusGroup([
+            '9261920915371232', //232026
+            '5920396192098309402868', //208347
+        ]),
+
+        try {
+          console.log('[RS TEST] projectId:', getProjectForUrl());
+          console.log('[RS TEST] projectHash:', getProjectHash());
+          console.log('[RS TEST] isTelegramVisitsFocusGroupEnabled:', isTelegramVisitsFocusGroupEnabled);
+          console.log('[RS TEST] Telegram.WebApp.DeviceStorage exists:',
+            !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.DeviceStorage)
+          );
+        } catch(e) {}
+
         referrer,
         isMarkerParsedFromEnv = true,
         initUrl = decodeURIComponent(getInitPageUrl()),
@@ -1628,98 +1643,239 @@ if (window.Element && !Element.prototype.closest) {
     };
 
     //TODO:исправить dry в методах storage https://roistat.platrum.ru/tasks/task/632239
-    storage = {
+    //TODO:релизнуть ФГ isTelegramVisitsFocusGroupEnabled в https://roistat.platrum.ru/tasks/task/CLOUD-638720
+    var storage = {
         fallbackData: {},
-
         isAvailable: function() {
+            var result = false;
             try {
-                if (!window.localStorage) return false;
-                window.localStorage.setItem('roistat_testKey', '1');
+                if (!window.localStorage || !window.localStorage.setItem || !window.localStorage.getItem || !window.localStorage.removeItem) {
+                    return result;
+                }
+                window.localStorage.setItem('roistat_testKey', 'testValue');
+                result = window.localStorage.getItem('roistat_testKey') === 'testValue';
                 window.localStorage.removeItem('roistat_testKey');
-                return true;
-            } catch(e) {
+            } catch (e) {
                 return false;
             }
+            return result;
         },
-
-        remove: function(name) {
-            const key = buildCookieName(name);
-
-            // Telegram DeviceStorage
-            if (name === 'roistat_visit' && window.Telegram?.WebApp?.DeviceStorage) {
-                try { Telegram.WebApp.DeviceStorage.remove(name); } catch(e) {}
+        set: function(name, value) {
+            var key = buildCookieName(name);
+            if (isTelegramVisitsFocusGroupEnabled && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.DeviceStorage) {
+                this.fallbackData[key] = value;
+                if (this.isSaveInCookieEnabled()) {
+                    roistatSetCookie(name, value, COOKIE_CONFIG);
+                }
+                console.log('[RS TEST] storage.set TG:', name);
+                tgDeviceStorageSet(name, value);
+                return;
+            } else if (this.isAvailable()) {
+                localStorage.setItem(key, value);
+                this.fallbackData[key] = value;
+            } else if (this.isSaveInCookieEnabled()) {
+                roistatSetCookie(name, value, COOKIE_CONFIG);
+                this.fallbackData[key] = value;
             }
-
-            if (this.isAvailable()) {
+        },
+        remove: function(name) {
+            var key = buildCookieName(name);
+            if (isTelegramVisitsFocusGroupEnabled && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.DeviceStorage) {
+                delete this.fallbackData[key];
+                var date = new Date(1970, 1, 1);
+                roistatSetCookie(name, '', {expires: date.toUTCString()});
+                tgDeviceStorageRemove(name);
+            } else if (this.isAvailable()) {
                 localStorage.removeItem(key);
             } else {
-                const date = new Date(1970, 1, 1);
+                var date = new Date(1970, 1, 1);
                 roistatSetCookie(name, '', {expires: date.toUTCString()});
             }
-
             delete this.fallbackData[key];
         },
+        save: function(name, value, options) {
+            var key = buildCookieName(name);
 
-        set: function(name, value) {
-            const key = buildCookieName(name);
-
-            if (name === 'roistat_visit' && window.Telegram?.WebApp?.DeviceStorage) {
-                try { Telegram.WebApp.DeviceStorage.set(name, String(value)); } catch(e) {}
+            if (isTelegramVisitsFocusGroupEnabled && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.DeviceStorage) {
+                roistatSetCookie(name, value, options);
+                this.fallbackData[key] = value;
+                tgDeviceStorageSet(name, value);
+                return;
             }
 
             if (this.isAvailable()) {
                 localStorage.setItem(key, value);
-            } else if (this.isSaveInCookieEnabled()) {
-                roistatSetCookie(name, value, COOKIE_CONFIG);
             }
-
+            roistatSetCookie(name, value, options);
             this.fallbackData[key] = value;
         },
-
         get: function(name) {
-            const key = buildCookieName(name);
-            let result = null;
+            var key = buildCookieName(name);
+            var result = null;
 
-            // DeviceStorage cache для roistat_visit
-            if (name === 'roistat_visit' && this.fallbackData[key] !== undefined) {
-                return this.fallbackData[key];
+            var isTg =
+                isTelegramVisitsFocusGroupEnabled
+                && window.Telegram
+                && window.Telegram.WebApp
+                && window.Telegram.WebApp.DeviceStorage;
+
+            try {
+                console.log('[RS TEST][storage.get] name=', name, 'key=', key, 'isTg=', isTg);
+            } catch(e) {}
+
+            if (isTg) {
+                result = this.fallbackData[key] || null;
+                try {
+                    console.log('[RS TEST][storage.get] via TG fallbackData:', key, '=>', result);
+                } catch(e) {}
+            } else if (this.isAvailable()) {
+                result = localStorage.getItem(key);
+                try {
+                    console.log('[RS TEST][storage.get] via localStorage:', key, '=>', result);
+                } catch(e) {}
+            } else {
+                try {
+                    console.log('[RS TEST][storage.get] no TG and localStorage unavailable');
+                } catch(e) {}
             }
 
-            if (this.isAvailable()) result = localStorage.getItem(key);
-            if (result === null) result = roistatGetCookie(name);
-            if (result === undefined) result = this.fallbackData[key];
+            if (result === null) {
+                var cookieVal = roistatGetCookie(name);
+                try {
+                    console.log('[RS TEST][storage.get] result is null -> try cookie:', name, '=>', cookieVal);
+                } catch(e) {}
+                result = cookieVal;
+            }
+
+            if (typeof result === 'undefined') {
+                result = this.fallbackData[key];
+                try {
+                    console.log('[RS TEST][storage.get] result is undefined -> fallbackData:', key, '=>', result);
+                } catch(e) {}
+            }
+
+            try {
+                console.log('[RS TEST][storage.get] return:', name, '=>', result);
+            } catch(e) {}
 
             return result;
         },
-
         setObject: function(name, data) {
-            const key = buildCookieName(name);
-            if (this.isAvailable()) localStorage.setItem(key, JSON.stringify(data));
-            this.fallbackData[key] = data;
+            var key = buildCookieName(name);
+            if (isTelegramVisitsFocusGroupEnabled && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.DeviceStorage) {
+                this.fallbackData[key] = data;
+                tgDeviceStorageSet(name, JSON.stringify(data));
+            } else if (this.isAvailable()) {
+                localStorage.setItem(key, JSON.stringify(data));
+                this.fallbackData[key] = data;
+            } else {
+                this.fallbackData[key] = data;
+            }
         },
-
         getObject: function(name) {
-            const key = buildCookieName(name);
-            let result = null;
-            if (this.isAvailable()) result = tryParseJson(localStorage.getItem(key));
-            if (result === null && this.fallbackData[key] !== undefined) result = this.fallbackData[key];
+            var key = buildCookieName(name);
+            var result = null;
+
+            if (isTelegramVisitsFocusGroupEnabled && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.DeviceStorage) {
+                result = this.fallbackData[key] || null;
+            } else if (this.isAvailable()) {
+                result = localStorage.getItem(key);
+                result = tryParseJson(result);
+            }
+
+            if (result === null) {
+                var fallback = this.fallbackData[key];
+                if (typeof fallback !== 'undefined') result = fallback;
+            }
+
             return result;
         },
-
-        isSaveInCookieEnabled: function() {
+        isSaveInCookieEnabled: function () {
             return this.get(ROISTAT_SAVE_DATA_IN_COOKIE) > 0;
         },
-
-        isExternalCountersEnabled: function() {
+        isExternalCountersEnabled: function () {
             return this.get(EXTERNAL_COUNTERS_ENABLED) > 0;
         }
     };
-    
-    storage.set('roistat_visit', 'test_visit_123');
-    storage.get('roistat_visit');
-    storage.setObject('test_object', {foo: 1, bar: 2});
-    storage.getObject('test_object');
-    storage.remove('roistat_visit');
+
+    function tgDeviceStorageAvailable() {
+        try {
+            return !!(isTelegramVisitsFocusGroupEnabled
+                && window.Telegram
+                && window.Telegram.WebApp
+                && window.Telegram.WebApp.DeviceStorage);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function tgDeviceStorageKey(name) {
+        return 'roistat:' + getProjectForUrl() + ':' + buildCookieName(name);
+    }
+
+    function tgDeviceStorageSet(name, value) {
+        if (!tgDeviceStorageAvailable()) return;
+        try {
+            window.Telegram.WebApp.DeviceStorage.setItem(
+                tgDeviceStorageKey(name),
+                String(value),
+                function(){ }
+            );
+        } catch (e) {}
+    }
+
+    function tgDeviceStorageRemove(name) {
+        if (!tgDeviceStorageAvailable()) return;
+        try {
+            window.Telegram.WebApp.DeviceStorage.removeItem(
+                tgDeviceStorageKey(name),
+                function(){ }
+            );
+        } catch (e) {}
+    }
+
+    function initTelegramDeviceStorage(done) {
+        if (!tgDeviceStorageAvailable()) {
+            if (typeof done === 'function') done();
+            return;
+        }
+
+        var keys = [ROISTAT_VISIT_COOKIE, ROISTAT_FIRST_VISIT_COOKIE, MARKER_COOKIE];
+        var left = keys.length;
+
+        function finish() {
+            var cookieVisit = roistatGetCookie(ROISTAT_VISIT_COOKIE);
+            if (!(cookieVisit > 0)) {
+                var visitFromFallback = storage.fallbackData[buildCookieName(ROISTAT_VISIT_COOKIE)];
+                if (visitFromFallback && String(visitFromFallback).length > 0) {
+                    roistatSetCookie(ROISTAT_VISIT_COOKIE, visitFromFallback, getVisitCookieConfig());
+                }
+            }
+            var markerCookie = roistatGetCookie(MARKER_COOKIE);
+            if (!markerCookie) {
+                var markerFromFallback = storage.fallbackData[buildCookieName(MARKER_COOKIE)];
+                if (markerFromFallback && String(markerFromFallback).length > 0) {
+                    var cookieConfig = getVisitCookieConfig();
+                    cookieConfig["max-age"] = cookieConfig.expires;
+                    roistatSetCookie(MARKER_COOKIE, markerFromFallback, cookieConfig);
+                }
+            }
+            if (typeof done === 'function') done();
+        }
+
+        keys.forEach(function(name) {
+            window.Telegram.WebApp.DeviceStorage.getItem(
+                tgDeviceStorageKey(name),
+                function(err, value) {
+                    if (!err && value != null && String(value).length > 0) {
+                        storage.fallbackData[buildCookieName(name)] = value;
+                    }
+                    left--;
+                    if (left <= 0) finish();
+                }
+            );
+        });
+    }
 
     /**
      * @returns {string}
@@ -3514,9 +3670,16 @@ if (window.Element && !Element.prototype.closest) {
 
     // @todo move module init to bottom, because submodules are to register their global functions before onRoistatModuleLoadedEvent
     try {
-        init();
+        initTelegramDeviceStorage(function() {
+            init();
+        });
     } catch(e) {
         sendLogMessage(e);
+        try {
+            init();
+        } catch(e2) {
+            sendLogMessage(e2);
+        }
     }
 
     (function widgets() {
