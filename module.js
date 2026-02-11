@@ -910,17 +910,8 @@ if (window.Element && !Element.prototype.closest) {
 
         isTelegramVisitsFocusGroupEnabled = isProjectInFocusGroup([
             '9261920915371232', //232026
-            '5920396192098309402868', //208347
+            '5920396192098309402868' //208347
         ]),
-
-        try {
-          console.log('[RS TEST] projectId:', getProjectForUrl());
-          console.log('[RS TEST] projectHash:', getProjectHash());
-          console.log('[RS TEST] isTelegramVisitsFocusGroupEnabled:', isTelegramVisitsFocusGroupEnabled);
-          console.log('[RS TEST] Telegram.WebApp.DeviceStorage exists:',
-            !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.DeviceStorage)
-          );
-        } catch(e) {}
 
         referrer,
         isMarkerParsedFromEnv = true,
@@ -1667,7 +1658,6 @@ if (window.Element && !Element.prototype.closest) {
                 if (this.isSaveInCookieEnabled()) {
                     roistatSetCookie(name, value, COOKIE_CONFIG);
                 }
-                console.log('[RS TEST] storage.set TG:', name);
                 tgDeviceStorageSet(name, value);
                 return;
             } else if (this.isAvailable()) {
@@ -1713,50 +1703,19 @@ if (window.Element && !Element.prototype.closest) {
             var key = buildCookieName(name);
             var result = null;
 
-            var isTg =
-                isTelegramVisitsFocusGroupEnabled
-                && window.Telegram
-                && window.Telegram.WebApp
-                && window.Telegram.WebApp.DeviceStorage;
-
-            try {
-                console.log('[RS TEST][storage.get] name=', name, 'key=', key, 'isTg=', isTg);
-            } catch(e) {}
-
-            if (isTg) {
+            if (isTelegramVisitsFocusGroupEnabled && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.DeviceStorage) {
                 result = this.fallbackData[key] || null;
-                try {
-                    console.log('[RS TEST][storage.get] via TG fallbackData:', key, '=>', result);
-                } catch(e) {}
             } else if (this.isAvailable()) {
                 result = localStorage.getItem(key);
-                try {
-                    console.log('[RS TEST][storage.get] via localStorage:', key, '=>', result);
-                } catch(e) {}
-            } else {
-                try {
-                    console.log('[RS TEST][storage.get] no TG and localStorage unavailable');
-                } catch(e) {}
             }
 
             if (result === null) {
-                var cookieVal = roistatGetCookie(name);
-                try {
-                    console.log('[RS TEST][storage.get] result is null -> try cookie:', name, '=>', cookieVal);
-                } catch(e) {}
-                result = cookieVal;
+                result = roistatGetCookie(name);
             }
 
             if (typeof result === 'undefined') {
                 result = this.fallbackData[key];
-                try {
-                    console.log('[RS TEST][storage.get] result is undefined -> fallbackData:', key, '=>', result);
-                } catch(e) {}
             }
-
-            try {
-                console.log('[RS TEST][storage.get] return:', name, '=>', result);
-            } catch(e) {}
 
             return result;
         },
