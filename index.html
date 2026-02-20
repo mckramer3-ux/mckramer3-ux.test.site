@@ -1,259 +1,53 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Тест Telegram Web App</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-    h1 {
-      color: #0088cc;
-    }
-    button {
-      background-color: #0088cc;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      font-size: 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background-color: #005f99;
-    }
-  </style>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    if (window.Telegram && Telegram.WebApp) {
-      Telegram.WebApp.ready();
-      // Telegram.WebApp.expand(); // опционально
-    }
-  });
-</script>
-</head>
-<body>
-  <!-- Roistat Counter Start -->
-<script>
-(function(w, d, s) {
-  w.roistatProjectId = 'cb926fac1babdb92091fc53bd712d3a2';
-  w.roistatHost = 'cloud.roistat.com';
+  <!doctype html>
+  <html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roistat Telegram Mini App Test</title>
+    <style>
+      body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#f6f8fb; }
+      .page { padding: 16px; max-width: 900px; margin: 0 auto; }
+      .card { background:#fff; border:1px solid #d9e0ea; border-radius:10px; padding:12px; }
+      .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+      button { padding:8px 10px; border-radius:8px; border:1px solid #b7c4d8; background:#fff; cursor:pointer; }
+      code { background:#eef3fb; padding:2px 4px; border-radius:4px; }
+    </style>
 
-  var js = d.createElement(s);
-  js.charset = "UTF-8";
-  js.async = true;
-  js.src = "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js?v=" + Date.now();
-
-  js.onload = function() {
-    console.log('[RS TEST] module.js loaded, window.roistat=', w.roistat);
-  };
-  js.onerror = function(e) {
-    console.log('[RS TEST] module.js failed to load', e);
-  };
-
-  var js2 = d.getElementsByTagName(s)[0];
-  js2.parentNode.insertBefore(js, js2);
-})(window, document, 'script');
-</script>
-<!-- Roistat Counter End -->
-  <h1>Тест Telegram Web App</h1>
-  <p>Нажмите кнопку, чтобы проверить работу Web App в Telegram:</p>
-  <button onclick="openTelegram()">Открыть в Telegram</button>
-
-  <script>
-    function openTelegram() {
-      // Ссылка на ваш Telegram Web App (пример)
-      const tgAppUrl = "https://t.me/your_bot?start=test";
-      window.open(tgAppUrl, "_blank");
-    }
-  </script>
- <div id="tg-check" style="position:fixed;left:0;bottom:0;right:0;max-height:55vh;overflow:auto;background:#111;color:#0f0;padding:10px;font:12px/1.4 monospace;z-index:999999;white-space:pre-wrap"></div>
- <div id="tg-err" style="position:fixed;left:0;top:0;right:0;max-height:25vh;overflow:auto;background:#300;color:#fff;padding:10px;font:12px/1.4 monospace;z-index:1000000;white-space:pre-wrap;display:none"></div>
-
-
-<script>
-(function () {
-  var lastTgRead = {};
-  var tgReadInFlight = false;
-
-  function safe(fn, fallback) {
-    try { return fn(); } catch (e) { return fallback; }
-  }
-
-  function digitsOnly(str) {
-    return String(str || '').replace(/\D/g, '');
-  }
-
-  function getCookie(name) {
-    // простая выборка cookie по имени
-    var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[$()*+./?[\\\]^{|}-]/g, '\\$&') + '=([^;]*)'));
-    return m ? decodeURIComponent(m[1]) : null;
-  }
-
-  function render(outLines) {
-    var el = document.getElementById('tg-check');
-    if (el) el.textContent = outLines.join('\n');
-  }
-
-  function renderErr(text) {
-    var el = document.getElementById('tg-err');
-    if (!el) return;
-    if (!text) {
-      el.style.display = 'none';
-      el.textContent = '';
-      return;
-    }
-    el.style.display = 'block';
-    el.textContent = text;
-  }
-
-  // ловим любые ошибки (часто полезно, когда нет консоли WebView)
-  window.addEventListener('error', function (e) {
-    renderErr('JS error: ' + (e.message || e.type) + '\n' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || ''));
-  });
-
-  window.addEventListener('unhandledrejection', function (e) {
-    renderErr('Unhandled rejection: ' + (e.reason && (e.reason.message || String(e.reason))) );
-  });
-
-  function update() {
-    var out = [];
-
-    // --- Telegram окружение
-    var hasTelegram = !!window.Telegram;
-    var hasWebApp = !!(window.Telegram && Telegram.WebApp);
-    var hasDeviceStorage = !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.DeviceStorage);
-
-    out.push('=== Telegram ===');
-    out.push('href: ' + location.href);
-    out.push('has window.Telegram: ' + hasTelegram);
-    out.push('has Telegram.WebApp: ' + hasWebApp);
-    out.push('has DeviceStorage: ' + hasDeviceStorage);
-    if (hasWebApp) {
-      out.push('tg version: ' + safe(function(){ return Telegram.WebApp.version; }, 'n/a'));
-      out.push('tg platform: ' + safe(function(){ return Telegram.WebApp.platform; }, 'n/a'));
-      out.push('initData len: ' + safe(function(){ return (Telegram.WebApp.initData || '').length; }, 0));
-    }
-
-    // --- Roistat базовые переменные
-    out.push('\n=== Roistat globals ===');
-    out.push('roistatProjectId: ' + String(window.roistatProjectId || ''));
-    out.push('roistatHost: ' + String(window.roistatHost || ''));
-    out.push('projectHash(digits): ' + digitsOnly(window.roistatProjectId));
-    out.push('roistatAlreadyStarted: ' + String(!!window.roistatAlreadyStarted));
-
-    // --- Roistat объект/версия/visit
-    out.push('\n=== Roistat object ===');
-    out.push('window.roistat exists: ' + String(!!window.roistat));
-    if (window.roistat) {
-      out.push('roistat.version: ' + String(window.roistat.version));
-      out.push('roistat.visit: ' + String(window.roistat.visit));
-      out.push('roistat.getVisit(): ' + String(safe(function(){ return window.roistat.getVisit(); }, 'err')));
-      out.push('roistat.getSource(): ' + String(safe(function(){ return window.roistat.getSource(); }, 'err')));
-    }
-
-    // --- Cookie/localStorage с точки зрения страницы
-    out.push('\n=== Browser storage snapshot ===');
-    // эти имена у вас в коде используются как базовые
-    var cookieVisit = getCookie('roistat_visit');
-    var cookieFirst = getCookie('roistat_first_visit');
-    var cookieMarker = getCookie('roistat_marker');
-
-    out.push('cookie roistat_visit: ' + String(cookieVisit));
-    out.push('cookie roistat_first_visit: ' + String(cookieFirst));
-    out.push('cookie roistat_marker: ' + String(cookieMarker));
-
-    var lsVisit = safe(function(){ return localStorage.getItem('roistat_visit'); }, null);
-    var lsFirst = safe(function(){ return localStorage.getItem('roistat_first_visit'); }, null);
-    var lsMarker = safe(function(){ return localStorage.getItem('roistat_marker'); }, null);
-
-    out.push('localStorage roistat_visit: ' + String(lsVisit));
-    out.push('localStorage roistat_first_visit: ' + String(lsFirst));
-    out.push('localStorage roistat_marker: ' + String(lsMarker));
-
-    // --- Telegram DeviceStorage чтение (асинхронно)
-    out.push('\n=== Telegram DeviceStorage ===');
-    if (!hasDeviceStorage) {
-      out.push('DeviceStorage not available.');
-      render(out);
-      return;
-    }
-
-    // ключи должны совпадать с тем, как у вас формируется tgDeviceStorageKey:
-    // 'roistat:' + projectId + ':' + buildCookieName(name)
-    // buildCookieName(name) в большинстве случаев == name (если не white label FG),
-    // поэтому для теста выводим именно так:
-    var projectId = String(window.roistatProjectId || '');
-    var keysToRead = [
-      'roistat_visit',
-      'roistat_first_visit',
-      'roistat_marker',
-      'roistat_settings_saved',
-      'roistat_is_save_data_in_cookie'
-    ];
-
-    var fullKeys = keysToRead.map(function(name){
-      return {
-        name: name,
-        key: 'roistat:' + projectId + ':' + name
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      window.RS_TEST_CONFIG = {
+        projectId: "cb926fac1babdb92091fc53bd712d3a2",
+        roistatHost: "cloud.roistat.com",
+        moduleUrl: "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js",
+        cacheBust: new URLSearchParams(location.search).get("nocache") === "1",
+        fixedVersion: new URLSearchParams(location.search).get("v") || "",
+        storageKeys: [
+          "roistat_visit",
+          "roistat_first_visit",
+          "roistat_marker",
+          "roistat_settings_saved",
+          "roistat_is_save_data_in_cookie"
+        ]
       };
-    });
-
-    // показываем последние прочитанные значения (из lastTgRead)
-    fullKeys.forEach(function(k){
-      var v = (k.key in lastTgRead) ? lastTgRead[k.key] : '(not read yet)';
-      out.push(k.key + ' => ' + String(v));
-    });
-
-    render(out);
-
-    // запускаем асинхронное чтение раз в ~1 сек, чтобы не спамить
-    if (tgReadInFlight) return;
-    tgReadInFlight = true;
-
-    var left = fullKeys.length;
-    fullKeys.forEach(function(k){
-      safe(function(){
-        Telegram.WebApp.DeviceStorage.getItem(k.key, function(err, value){
-          // err может быть объектом/строкой или null
-          if (err) {
-            lastTgRead[k.key] = 'ERR: ' + (err.message || String(err));
-          } else if (value === null || typeof value === 'undefined' || String(value).length === 0) {
-            lastTgRead[k.key] = '(empty)';
-          } else {
-            lastTgRead[k.key] = value;
-          }
-
-          left--;
-          if (left <= 0) {
-            tgReadInFlight = false;
-          }
-        });
-      }, null);
-    });
-  }
-
-  // обновляем часто, но чтение TG делаем “мягко” (tgReadInFlight защищает от спама)
-  setInterval(update, 500);
-})();
-</script>
-</body>
-</html>
-
-
-
-
-
-
-
-
+    </script>
+    <script defer src="./loader.js"></script>
+    <script defer src="./debug-overlay.js"></script>
+  </head>
+  <body>
+    <div class="page">
+      <div class="card">
+        <h2 style="margin:0 0 8px;">Roistat Telegram Mini App Test</h2>
+        <div>projectId: <code id="pid"></code></div>
+        <div>module: <code id="murl"></code></div>
+        <div class="row">
+          <button id="btn-force-refresh">Force DeviceStorage read</button>
+          <button id="btn-clear-cookie">Clear roistat cookies</button>
+          <button id="btn-clear-ls">Clear roistat localStorage</button>
+        </div>
+        <p style="margin-top:10px;">
+          Для запуска именно как Mini App откройте через кнопку <code>web_app</code> у бота.
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>
