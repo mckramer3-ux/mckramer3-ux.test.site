@@ -1,26 +1,33 @@
-  <!doctype html>
-  <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Roistat Telegram Mini App Test</title>
-    <style>
-      body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#f6f8fb; }
-      .page { padding: 16px; max-width: 900px; margin: 0 auto; }
-      .card { background:#fff; border:1px solid #d9e0ea; border-radius:10px; padding:12px; }
-      .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-      button { padding:8px 10px; border-radius:8px; border:1px solid #b7c4d8; background:#fff; cursor:pointer; }
-      code { background:#eef3fb; padding:2px 4px; border-radius:4px; }
-    </style>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Roistat Telegram Mini App Test</title>
+  <style>
+    body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#f6f8fb; }
+    .page { padding: 16px; max-width: 900px; margin: 0 auto; }
+    .card { background:#fff; border:1px solid #d9e0ea; border-radius:10px; padding:12px; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    button { padding:8px 10px; border-radius:8px; border:1px solid #b7c4d8; background:#fff; cursor:pointer; }
+    code { background:#eef3fb; padding:2px 4px; border-radius:4px; }
+  </style>
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    (function () {
+      var qs = new URLSearchParams(location.search);
+      var projectKey = qs.get("projectKey") || qs.get("projectId") || "cb926fac1babdb92091fc53bd712d3a2";
+
       window.RS_TEST_CONFIG = {
-        projectId: "cb926fac1babdb92091fc53bd712d3a2",
-        roistatHost: "cloud.roistat.com",
-        moduleUrl: "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js",
-        cacheBust: new URLSearchParams(location.search).get("nocache") === "1",
-        fixedVersion: new URLSearchParams(location.search).get("v") || "",
+        projectKey: projectKey,
+        projectId: projectKey,
+        roistatHost: qs.get("host") || "cloud.roistat.com",
+        moduleUrl: qs.get("moduleUrl") || "https://mckramer3-ux.github.io/mckramer3-ux.test.site/module.js",
+        cookieDomain: qs.get("cookieDomain") || "",
+        cacheBust: qs.get("nocache") === "1",
+        fixedVersion: qs.get("v") || "",
+        storagePrefix: qs.get("prefix") || "",
         storageKeys: [
           "roistat_visit",
           "roistat_first_visit",
@@ -29,25 +36,26 @@
           "roistat_is_save_data_in_cookie"
         ]
       };
-    </script>
-    <script defer src="./loader.js"></script>
-    <script defer src="./debug-overlay.js"></script>
-  </head>
-  <body>
-    <div class="page">
-      <div class="card">
-        <h2 style="margin:0 0 8px;">Roistat Telegram Mini App Test</h2>
-        <div>projectId: <code id="pid"></code></div>
-        <div>module: <code id="murl"></code></div>
-        <div class="row">
-          <button id="btn-force-refresh">Force DeviceStorage read</button>
-          <button id="btn-clear-cookie">Clear roistat cookies</button>
-          <button id="btn-clear-ls">Clear roistat localStorage</button>
-        </div>
-        <p style="margin-top:10px;">
-          Для запуска именно как Mini App откройте через кнопку <code>web_app</code> у бота.
-        </p>
+    })();
+  </script>
+  <script defer src="./loader.js"></script>
+  <script defer src="./debug-overlay.js"></script>
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <h2 style="margin:0 0 8px;">Roistat Telegram Mini App Test</h2>
+      <div>projectKey: <code id="pid"></code></div>
+      <div>module: <code id="murl"></code></div>
+      <div class="row">
+        <button id="btn-force-refresh">Force DeviceStorage read</button>
+        <button id="btn-clear-cookie">Clear roistat cookies</button>
+        <button id="btn-clear-ls">Clear roistat localStorage</button>
       </div>
+      <p style="margin-top:10px;">
+        Для запуска именно как Mini App откройте через кнопку <code>web_app</code> у бота.
+      </p>
     </div>
-  </body>
-  </html>
+  </div>
+</body>
+</html>
