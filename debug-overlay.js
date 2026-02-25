@@ -75,6 +75,18 @@
     }
   }
 
+  function once(callback) {
+    var isCalled = false;
+    return function () {
+      if (isCalled) {
+        return;
+      }
+
+      isCalled = true;
+      callback.apply(null, arguments);
+    };
+  }
+
   window.addEventListener("error", function (e) {
     pushErr("error: " + (e.message || e.type) + " @" + (e.filename || "") + ":" + (e.lineno || 0));
   });
@@ -85,16 +97,9 @@
   });
 
   function dsGetItem(storage, key, cb) {
-    var called = false;
-
-    function done(err, value) {
-      if (called) {
-        return;
-      }
-
-      called = true;
+    var done = once(function (err, value) {
       cb(err, value);
-    }
+    });
 
     try {
       var ret = storage.getItem(key, function (err, value) {
@@ -192,6 +197,7 @@
     lines.push("Module loader:");
     lines.push("  state: " + st.state);
     lines.push("  stage: " + st.stage);
+    lines.push("  usedInitEndpoint: " + !!st.usedInitEndpoint);
     lines.push("  src: " + st.src);
     lines.push("  storageKey(main): " + (st.storageKey || ""));
     lines.push("  storageKey(legacy): roistat_visit");
