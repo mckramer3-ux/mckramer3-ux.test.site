@@ -2,6 +2,9 @@
   var cfg = window.RS_TEST_CONFIG || {};
   var VISIT_COOKIE = "roistat_visit";
   var LEGACY_TELEGRAM_VISIT_STORAGE_KEY = VISIT_COOKIE;
+  var UTM_SOURCE_QUERY_PARAM = "utm_source";
+  var TELEGRAM_MINI_APP_UTM_SOURCE = "telegram_mini_app";
+  var saveVisitToTelegramStorageHook = "roistatSaveVisitToTelegramStorage";
 
   var status = {
     state: "idle",
@@ -10,7 +13,8 @@
     error: "",
     storageKey: "",
     legacyStorageKey: LEGACY_TELEGRAM_VISIT_STORAGE_KEY,
-    restoredVisit: ""
+    restoredVisit: "",
+    usedInitEndpoint: false
   };
   window.__rsLoaderStatus = status;
 
@@ -18,8 +22,30 @@
     window.dispatchEvent(new CustomEvent("rs:module-status", { detail: status }));
   }
 
+  function handleErrorSilently() {}
+
+  function once(callback) {
+    var isCalled = false;
+    return function () {
+      if (isCalled) {
+        return;
+      }
+
+      isCalled = true;
+      callback.apply(null, arguments);
+    };
+  }
+
+  function getProjectKey() {
+    return String(cfg.projectKey || cfg.projectId || "");
+  }
+
   function isVisitValueValid(visitValue) {
-    return typeof visitValue === "string" && visitValue !== "";
+    if (typeof visitValue !== "string" || visitValue === "") {
+      return false;
+    }
+
+    return visitValue !== "null" && visitValue !== "undefined";
   }
 
   function hasVisitCookie() {
@@ -40,15 +66,29 @@
     }
   }
 
+  function resolveCookieDomain() {
+    if (typeof window.roistatCookieDomain === "string" && window.roistatCookieDomain !== "") {
+      return window.roistatCookieDomain;
+    }
+
+    if (typeof cfg.cookieDomain === "string" && cfg.cookieDomain !== "") {
+      return cfg.cookieDomain;
+    }
+
+    return "";
+  }
+
   function setVisitCookie(visitValue) {
     if (!isVisitValueValid(visitValue)) {
       return;
     }
 
     var cookie = VISIT_COOKIE + "=" + encodeURIComponent(visitValue) + "; path=/";
-    if (cfg.cookieDomain) {
-      cookie += "; domain=" + cfg.cookieDomain;
+    var cookieDomain = resolveCookieDomain();
+    if (cookieDomain) {
+      cookie += "; domain=" + cookieDomain;
     }
+
     document.cookie = cookie;
   }
 
@@ -56,15 +96,51 @@
     if (typeof cfg.storagePrefix === "string" && cfg.storagePrefix !== "") {
       return cfg.storagePrefix;
     }
+
     if (typeof window.maCookiePrefix === "string" && window.maCookiePrefix !== "") {
       return window.maCookiePrefix;
     }
+
     return "roistat";
   }
 
   function getTelegramVisitStorageKey() {
-    var projectKey = String(cfg.projectKey || cfg.projectId || "");
-    return resolvePrefix() + "_" + projectKey + "_" + VISIT_COOKIE;
+    return resolvePrefix() + "_" + getProjectKey() + "_" + VISIT_COOKIE;
+  }
+
+  function isTelegramMiniAppContext() {
+    return !!(window.Telegram && Telegram.WebApp);
+  }
+
+  function canAppendTelegramUtmSource() {
+    try {
+      if (typeof window.URLSearchParams === "function") {
+        var utmSource = new window.URLSearchParams(document.location.search || "").get(UTM_SOURCE_QUERY_PARAM);
+        return typeof utmSource !== "string" || utmSource === "";
+      }
+    } catch (e) {
+      handleErrorSilently(e);
+    }
+
+    var utmSourceMatch = (document.location.search || "").match(/(?:^|[?&])utm_source=([^&]*)/);
+    if (utmSourceMatch === null) {
+      return true;
+    }
+
+    try {
+      return decodeURIComponent(utmSourceMatch[1] || "") === "";
+    } catch (_) {
+      return (utmSourceMatch[1] || "") === "";
+    }
+  }
+
+  function buildInitUrl() {
+    var initUrl = "/api/site/1.0/" + encodeURIComponent(getProjectKey()) + "/init?referrer=" + encodeURIComponent(document.location.href);
+    if (isTelegramMiniAppContext() && canAppendTelegramUtmSource()) {
+      initUrl += "&utm_source=" + encodeURIComponent(TELEGRAM_MINI_APP_UTM_SOURCE);
+    }
+
+    return initUrl;
   }
 
   function getTelegramStorage() {
@@ -76,97 +152,181 @@
     return webApp.DeviceStorage || webApp.deviceStorage || webApp.CloudStorage || webApp.cloudStorage || null;
   }
 
-  function getStorageItem(storage, key, cb) {
-    var called = false;
+  function getStorageItem(storage, key, callback) {
+    var done = once(function (error, value) {
+      callback(error, value);
+    });
 
-    function done(err, value) {
-      if (called) {
+    try {
+      var result = storage.getItem(key, function (error, value) {
+        done(error, value);
+      });
+
+      if (result && typeof result.then === "function") {
+        result.then(function (value) {
+          done(null, value);
+        }, function (error) {
+          done(error);
+        });
         return;
       }
 
-      called = true;
-      cb(err, value);
-    }
-
-    try {
-      var ret = storage.getItem(key, function (err, value) {
-        done(err, value);
-      });
-
-      if (ret && typeof ret.then === "function") {
-        ret.then(function (value) {
-          done(null, value);
-        }).catch(function (err) {
-          done(err);
-        });
-      } else if (typeof ret !== "undefined") {
-        done(null, ret);
+      if (typeof result !== "undefined") {
+        done(null, result);
       }
     } catch (e) {
       done(e);
     }
   }
 
-  function buildSrc() {
-    var src = cfg.moduleUrl || "";
-    var params = [];
+  function setStorageItem(storage, key, value, callback) {
+    var done = once(function (error) {
+      callback(error);
+    });
 
-    if (cfg.fixedVersion) {
-      params.push("v=" + encodeURIComponent(cfg.fixedVersion));
+    if (!storage || typeof storage.setItem !== "function") {
+      done(new Error("StorageSetItemUnsupported"));
+      return;
     }
 
-    if (cfg.cacheBust) {
-      params.push("cb=" + Date.now());
-    }
+    try {
+      var result = storage.setItem(key, value, function (error) {
+        done(error || null);
+      });
 
-    if (!params.length) {
-      return src;
-    }
+      if (result && typeof result.then === "function") {
+        result.then(function () {
+          done(null);
+        }, function (error) {
+          done(error);
+        });
+        return;
+      }
 
-    return src + (src.indexOf("?") >= 0 ? "&" : "?") + params.join("&");
+      if (typeof result !== "undefined") {
+        done(null);
+      }
+    } catch (e) {
+      done(e);
+    }
   }
 
-  function loadModule() {
-    var src = buildSrc();
+  function saveVisitToTelegramStorage(visitValue) {
+    if (!isVisitValueValid(visitValue)) {
+      return;
+    }
 
-    window.roistatProjectId = cfg.projectKey || cfg.projectId;
-    window.roistatHost = cfg.roistatHost;
+    var storage = getTelegramStorage();
+    if (!storage) {
+      return;
+    }
+
+    var storageKey = getTelegramVisitStorageKey();
+    setStorageItem(storage, storageKey, visitValue, function () {});
+    if (storageKey !== LEGACY_TELEGRAM_VISIT_STORAGE_KEY) {
+      setStorageItem(storage, LEGACY_TELEGRAM_VISIT_STORAGE_KEY, visitValue, function () {});
+    }
+  }
+
+  function loadCounter() {
+    var host = String(cfg.roistatHost || "cloud.roistat.com");
+    var protocol = document.location.protocol === "https:" ? "https://" : "http://";
+    var hasCookie = hasVisitCookie();
+    var src = "";
+
+    window.roistatHost = host;
+    window.roistatProjectId = getProjectKey();
+
+    if (typeof cfg.moduleUrl === "string" && cfg.moduleUrl !== "") {
+      src = cfg.moduleUrl;
+      status.usedInitEndpoint = false;
+    } else if (hasCookie) {
+      src = protocol + host + "/dist/module.js";
+      status.usedInitEndpoint = false;
+    } else {
+      src = protocol + host + buildInitUrl();
+      status.usedInitEndpoint = true;
+    }
 
     status.state = "loading";
-    status.stage = "load-module";
+    status.stage = hasCookie ? "load-module-direct" : "load-module-init";
     status.src = src;
     status.error = "";
     emit();
 
-    var s = document.createElement("script");
-    s.async = true;
-    s.charset = "UTF-8";
-    s.src = src;
+    var script = document.createElement("script");
+    script.async = true;
+    script.charset = "UTF-8";
+    script.src = src;
 
-    s.onload = function () {
+    script.onload = function () {
       status.state = "loaded";
       status.stage = "module-loaded";
       status.error = "";
       emit();
     };
 
-    s.onerror = function () {
+    script.onerror = function () {
       status.state = "error";
       status.stage = "module-load-error";
       status.error = "Failed to load " + src;
       emit();
     };
 
-    document.head.appendChild(s);
+    document.head.appendChild(script);
+  }
+
+  function setupRoistatHooks() {
+    window.roistatMultiWidgetOnly = true;
+    window.roistatOnlineChatOnly = false;
+
+    window[saveVisitToTelegramStorageHook] = function () {
+      var cookieVisit = getCookie(VISIT_COOKIE);
+      if (isVisitValueValid(cookieVisit)) {
+        saveVisitToTelegramStorage(cookieVisit);
+        return;
+      }
+
+      try {
+        if (window.roistat && typeof window.roistat.getVisit === "function") {
+          var roistatVisit = window.roistat.getVisit();
+          if (roistatVisit !== null && typeof roistatVisit !== "undefined") {
+            saveVisitToTelegramStorage(String(roistatVisit));
+          }
+        }
+      } catch (e) {
+        handleErrorSilently(e);
+      }
+    };
+
+    window.onRoistatAllModulesLoaded = function () {
+      var sharedData = window.__sharedData || {};
+
+      if (typeof window.setRoistatOnlineChatCustomParams === "function") {
+        window.setRoistatOnlineChatCustomParams({
+          user_id: sharedData.user_id || null,
+          user_name: sharedData.user_name || null,
+          user_email: sharedData.chat_user_email || null,
+          project_id: sharedData.project_id || getProjectKey(),
+          user_agent: window.navigator.userAgent,
+          current_page: window.location.pathname
+        });
+      }
+
+      if (typeof window[saveVisitToTelegramStorageHook] === "function") {
+        window[saveVisitToTelegramStorageHook]();
+      }
+    };
   }
 
   function resolveVisitAndLoadCounter(visitValue) {
     if (isVisitValueValid(visitValue)) {
       status.restoredVisit = visitValue;
       setVisitCookie(visitValue);
+      saveVisitToTelegramStorage(visitValue);
     }
 
-    loadModule();
+    loadCounter();
   }
 
   function readStorageAndLoadCounter() {
@@ -179,7 +339,8 @@
       status.stage = "cookie-already-exists";
       status.restoredVisit = getCookie(VISIT_COOKIE) || "";
       emit();
-      loadModule();
+      saveVisitToTelegramStorage(status.restoredVisit);
+      loadCounter();
       return;
     }
 
@@ -187,14 +348,14 @@
     if (!storage || typeof storage.getItem !== "function") {
       status.stage = "storage-unavailable";
       emit();
-      loadModule();
+      loadCounter();
       return;
     }
 
-    getStorageItem(storage, status.storageKey, function (err, visitValue) {
-      if (err) {
+    getStorageItem(storage, status.storageKey, function (error, visitValue) {
+      if (error) {
         status.stage = "storage-main-error";
-        status.error = String(err && (err.message || err));
+        status.error = String(error && (error.message || error));
         emit();
         resolveVisitAndLoadCounter(null);
         return;
@@ -209,10 +370,11 @@
 
       status.stage = "storage-main-empty";
       emit();
-      getStorageItem(storage, LEGACY_TELEGRAM_VISIT_STORAGE_KEY, function (legacyErr, legacyVisitValue) {
-        if (legacyErr) {
+
+      getStorageItem(storage, LEGACY_TELEGRAM_VISIT_STORAGE_KEY, function (legacyError, legacyVisitValue) {
+        if (legacyError) {
           status.stage = "storage-legacy-error";
-          status.error = String(legacyErr && (legacyErr.message || legacyErr));
+          status.error = String(legacyError && (legacyError.message || legacyError));
           emit();
           resolveVisitAndLoadCounter(null);
           return;
@@ -230,11 +392,11 @@
     var murl = document.getElementById("murl");
 
     if (pid) {
-      pid.textContent = String(cfg.projectKey || cfg.projectId || "");
+      pid.textContent = getProjectKey();
     }
 
     if (murl) {
-      murl.textContent = String(cfg.moduleUrl || "");
+      murl.textContent = cfg.moduleUrl || "(auto: init/dist from roistatHost)";
     }
 
     if (window.Telegram && Telegram.WebApp) {
@@ -243,6 +405,7 @@
       } catch (_) {}
     }
 
+    setupRoistatHooks();
     readStorageAndLoadCounter();
   });
 })();
